@@ -32,7 +32,13 @@ struct AlbumsView: View {
         albums.filter { selection.contains($0.localIdentifier) }
     }
 
+    // The body is split into stages so the Swift compiler can type-check each one quickly.
     var body: some View {
+        withDialogs(withAlerts(screen))
+            .libraryErrorAlert()
+    }
+
+    private var screen: some View {
         Group {
             if albums.isEmpty {
                 emptyState
@@ -53,64 +59,89 @@ struct AlbumsView: View {
             // Drop albums that vanished, e.g. deleted in the Photos app meanwhile.
             selection.formIntersection(ids)
         }
-        .alert("New album", isPresented: $showNewAlbum) {
-            TextField("Album name", text: $newAlbumName)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") {
-                let name = newAlbumName
-                Task {
-                    if await library.createAlbum(named: name) != nil {
-                        Haptics.done()
-                    }
+    }
+
+    private func withAlerts(_ content: some View) -> some View {
+        content
+            .alert("New album", isPresented: $showNewAlbum) {
+                TextField("Album name", text: $newAlbumName)
+                Button("Cancel", role: .cancel) {}
+                Button("Create") {
+                    createAlbum()
+                }
+                .disabled(isNewAlbumNameBlank)
+            }
+            .alert("Rename album", isPresented: $showRename) {
+                TextField("Album name", text: $renameText)
+                Button("Cancel", role: .cancel) {
+                    renameTarget = nil
+                }
+                Button("Save") {
+                    renameAlbum()
                 }
             }
-            .disabled(newAlbumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .alert("Rename album", isPresented: $showRename) {
-            TextField("Album name", text: $renameText)
-            Button("Cancel", role: .cancel) {
-                renameTarget = nil
+    }
+
+    private func withDialogs(_ content: some View) -> some View {
+        content
+            .confirmationDialog(
+                actionTitle,
+                isPresented: isShowingActions,
+                titleVisibility: .visible,
+                presenting: actionTarget
+            ) { album in
+                Button("Rename") {
+                    startRename(album)
+                }
+                Button("Select") {
+                    startSelecting(with: album)
+                }
+                Button("Delete Album", role: .destructive) {
+                    delete([album])
+                }
+            } message: { _ in
+                Text("Deleting an album keeps its photos and videos in your library.")
             }
-            Button("Save") {
-                guard let album = renameTarget else { return }
-                let name = renameText
-                renameTarget = nil
-                Task { await library.rename(album, to: name) }
+            .confirmationDialog(
+                batchDeleteTitle,
+                isPresented: $showBatchDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button(batchDeleteButtonTitle, role: .destructive) {
+                    delete(selectedAlbums)
+                }
+            } message: {
+                Text("The photos and videos in them stay in your library and come back to be sorted.")
             }
-        }
-        .confirmationDialog(
-            actionTarget?.localizedTitle ?? "Album",
-            isPresented: Binding(
-                get: { actionTarget != nil },
-                set: { if !$0 { actionTarget = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: actionTarget
-        ) { album in
-            Button("Rename") {
-                startRename(album)
+    }
+
+    // MARK: - Dialog text
+
+    private var actionTitle: String {
+        actionTarget?.localizedTitle ?? "Album"
+    }
+
+    private var isShowingActions: Binding<Bool> {
+        Binding(
+            get: { actionTarget != nil },
+            set: { shown in
+                if !shown { actionTarget = nil }
             }
-            Button("Select") {
-                startSelecting(with: album)
-            }
-            Button("Delete Album", role: .destructive) {
-                delete([album])
-            }
-        } message: { _ in
-            Text("Deleting an album keeps its photos and videos in your library.")
-        }
-        .confirmationDialog(
-            selectedAlbums.count == 1 ? "Delete 1 album?" : "Delete \(selectedAlbums.count) albums?",
-            isPresented: $showBatchDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button(selectedAlbums.count == 1 ? "Delete Album" : "Delete \(selectedAlbums.count) Albums", role: .destructive) {
-                delete(selectedAlbums)
-            }
-        } message: {
-            Text("The photos and videos in them stay in your library and come back to be sorted.")
-        }
-        .libraryErrorAlert()
+        )
+    }
+
+    private var batchDeleteTitle: String {
+        let count = selectedAlbums.count
+        return count == 1 ? "Delete 1 album?" : "Delete \(count) albums?"
+    }
+
+    private var batchDeleteButtonTitle: String {
+        let count = selectedAlbums.count
+        return count == 1 ? "Delete Album" : "Delete \(count) Albums"
+    }
+
+    private var isNewAlbumNameBlank: Bool {
+        newAlbumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Grid
@@ -119,20 +150,7 @@ struct AlbumsView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 18) {
                 ForEach(albums, id: \.localIdentifier) { album in
-                    AlbumCard(
-                        album: album,
-                        version: library.libraryVersion,
-                        isSelecting: isSelecting,
-                        isSelected: selection.contains(album.localIdentifier)
-                    )
-                    .onTapGesture {
-                        tapped(album)
-                    }
-                    .onLongPressGesture(minimumDuration: 0.35) {
-                        held(album)
-                    }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityAddTraits(selection.contains(album.localIdentifier) ? .isSelected : [])
+                    cell(for: album)
                 }
             }
             .padding(16)
@@ -144,6 +162,24 @@ struct AlbumsView: View {
                     .padding(.bottom, 24)
             }
         }
+    }
+
+    private func cell(for album: PHAssetCollection) -> some View {
+        let isSelected = selection.contains(album.localIdentifier)
+        let traits: AccessibilityTraits = isSelected ? [.isButton, .isSelected] : [.isButton]
+        return AlbumCard(
+            album: album,
+            version: library.libraryVersion,
+            isSelecting: isSelecting,
+            isSelected: isSelected
+        )
+        .onTapGesture {
+            tapped(album)
+        }
+        .onLongPressGesture(minimumDuration: 0.35) {
+            held(album)
+        }
+        .accessibilityAddTraits(traits)
     }
 
     private var emptyState: some View {
@@ -276,6 +312,22 @@ struct AlbumsView: View {
         showNewAlbum = true
     }
 
+    private func createAlbum() {
+        let name = newAlbumName
+        Task {
+            if await library.createAlbum(named: name) != nil {
+                Haptics.done()
+            }
+        }
+    }
+
+    private func renameAlbum() {
+        guard let album = renameTarget else { return }
+        let name = renameText
+        renameTarget = nil
+        Task { await library.rename(album, to: name) }
+    }
+
     private func startRename(_ album: PHAssetCollection) {
         renameTarget = album
         renameText = album.localizedTitle ?? ""
@@ -336,7 +388,7 @@ private struct AlbumCard: View {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.title2)
                             .symbolRenderingMode(.palette)
-                            .foregroundStyle(Color.white, isSelected ? Color.accentColor : Color.black.opacity(0.25))
+                            .foregroundStyle(Color.white, badgeFill)
                             .shadow(radius: 2)
                             .padding(6)
                             .transition(.scale.combined(with: .opacity))
@@ -359,6 +411,10 @@ private struct AlbumCard: View {
         .task(id: "\(album.localIdentifier)#\(version)") {
             load()
         }
+    }
+
+    private var badgeFill: Color {
+        isSelected ? Color.accentColor : Color.black.opacity(0.25)
     }
 
     private var countText: String {
