@@ -451,27 +451,38 @@ final class LibraryStore: NSObject, ObservableObject {
     /// Uses Apple's own album delete: the album goes, its photos and videos stay in the library
     /// and come back to be sorted.
     func deleteAlbum(_ album: PHAssetCollection) async {
+        await deleteAlbums([album])
+    }
+
+    /// Deletes several albums behind a single iOS prompt. Returns false if nothing was deleted.
+    @discardableResult
+    func deleteAlbums(_ targets: [PHAssetCollection]) async -> Bool {
+        guard !targets.isEmpty else { return false }
         do {
             try await write {
-                PHAssetCollectionChangeRequest.deleteAssetCollections([album] as NSArray)
+                PHAssetCollectionChangeRequest.deleteAssetCollections(targets as NSArray)
             }
         } catch {
             if !Self.isUserCancel(error) {
-                alertMessage = "Couldn't delete the album. \(error.localizedDescription)"
+                let noun = targets.count == 1 ? "the album" : "the albums"
+                alertMessage = "Couldn't delete \(noun). \(error.localizedDescription)"
             }
-            return
+            return false
         }
-        let id = album.localIdentifier
-        albums.removeAll { $0.localIdentifier == id }
-        state.albumLastUsed[id] = nil
+        let ids = Set(targets.map { $0.localIdentifier })
+        albums.removeAll { ids.contains($0.localIdentifier) }
+        for id in ids {
+            state.albumLastUsed[id] = nil
+        }
         undoStack.removeAll { action in
             if case .filed(_, let albumID) = action {
-                return albumID == id
+                return ids.contains(albumID)
             }
             return false
         }
         scheduleSave()
         await reload()
+        return true
     }
 
     // MARK: - Sorted album

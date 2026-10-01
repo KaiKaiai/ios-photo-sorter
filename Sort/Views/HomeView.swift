@@ -6,19 +6,26 @@ struct HomeView: View {
     @State private var isSorting = false
     @State private var showSettings = false
     @State private var showTrash = false
+    @State private var showAlbums = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 28) {
                 Spacer(minLength: 0)
                 countBlock
-                trashButton
+                HStack(spacing: 12) {
+                    trashButton
+                    albumsButton
+                }
                 Spacer(minLength: 0)
                 startButton
             }
             .padding(24)
-            .libraryErrorAlert(isEnabled: !isSorting && !showSettings && !showTrash)
+            .libraryErrorAlert(isEnabled: !isSorting && !showSettings && !showTrash && !showAlbums)
             .navigationTitle("Sort")
+            .navigationDestination(isPresented: $showAlbums) {
+                AlbumsView()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -84,6 +91,20 @@ struct HomeView: View {
         .buttonStyle(.bordered)
         .tint(library.trashAssets.isEmpty ? Color.secondary : Color.red)
         .disabled(library.trashAssets.isEmpty)
+    }
+
+    private var albumsButton: some View {
+        Button {
+            showAlbums = true
+        } label: {
+            Label(
+                library.albums.count == 1 ? "1 album" : "\(library.albums.count) albums",
+                systemImage: "rectangle.stack"
+            )
+            .font(.body.weight(.medium))
+        }
+        .buttonStyle(.bordered)
+        .disabled(!library.hasLoaded)
     }
 
     private var startButton: some View {
