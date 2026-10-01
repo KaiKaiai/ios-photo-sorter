@@ -18,7 +18,7 @@ It works directly on the Photos library through Apple's Photos framework, so eve
 There's no Mac involved. GitHub's cloud Macs do the work:
 
 - **Build check** runs on every push to `main`. It compiles the app without signing, so it needs no Apple account.
-- **TestFlight** runs when started by hand (Actions → TestFlight → Run workflow) and on the 1st of every second month, so a build never hits TestFlight's 90-day expiry. It archives the app unsigned, then signs it with Apple's cloud-managed distribution certificate and uploads it for internal testing.
+- **TestFlight** runs when started by hand (Actions → TestFlight → Run workflow), when a `build-N` tag is pushed, and on the 1st of every second month, so a build never hits TestFlight's 90-day expiry. It archives the app unsigned, then signs it with Apple's cloud-managed distribution certificate and uploads it for internal testing.
 
 The Xcode project is generated from `project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen), so there's no `.xcodeproj` in the repo.
 

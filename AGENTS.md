@@ -20,10 +20,16 @@ There is no Mac. All builds run on GitHub's cloud Macs, so there's no simulator,
 | Workflow | Runs | Does |
 |---|---|---|
 | `.github/workflows/build-check.yml` | On every push to `main` that touches app code, on pull requests, or by hand | An unsigned compile. This is the check every change must pass. |
-| `.github/workflows/testflight.yml` | **By hand only** (Actions → TestFlight → Run workflow), plus the 1st of every second month | Archives the app, has Apple sign it in the cloud, and uploads it to TestFlight |
+| `.github/workflows/testflight.yml` | **On request only**: Actions → TestFlight → Run workflow, or pushing a `build-N` tag. Also on the 1st of every second month | Archives the app, has Apple sign it in the cloud, and uploads it to TestFlight |
 
 - The build check must be green before you call any change done. When it fails, read the log, fix the cause and push again. Don't disable or weaken the check.
-- Don't trigger the TestFlight workflow yourself unless the owner asks. They start it.
+- Deploy to TestFlight only when the owner asks. To deploy:
+  1. Make sure the build check is green on `main`.
+  2. Find the highest existing `build-N` tag with `git ls-remote --tags origin 'build-*'`.
+  3. Tag `main` with the next number and push the tag: `git tag build-N origin/main`, then `git push origin build-N`.
+
+  Agents can't press Run workflow, because the Claude GitHub app can't start workflows.
+- Changes to `.github/workflows/` touch the job that holds the owner's Apple API key. Keep them minimal, never print or send secrets anywhere, and point them out to the owner.
 - The build number comes from the workflow's run number. Change `MARKETING_VERSION` in `project.yml` only for a release the owner asks for.
 - New Swift files under `Sort/` are picked up automatically. There's no project file to edit.
 
