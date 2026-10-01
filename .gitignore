@@ -1,0 +1,10 @@
+# Xcode project is generated on the build machine from project.yml
+*.xcodeproj
+*.xcworkspace
+build/
+DerivedData/
+xcuserdata/
+.DS_Store
+*.p8
+*.ipa
+*.xcarchive
