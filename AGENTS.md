@@ -4,6 +4,8 @@ Sort is a personal iPhone app for clearing out a photo library. Each photo or vi
 
 Read this file and [`docs/DESIGN.md`](docs/DESIGN.md) before changing anything. Follow both. If a request conflicts with them, say so instead of quietly breaking the rule.
 
+More detail lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (how the code works), [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) (building, deploying, secrets, versioning) and [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) (what the app does for the owner).
+
 ## Hard rules
 
 - **Offline and private.** No servers, accounts, analytics, crash reporters, ads or tracking. The only network use allowed is Apple fetching the owner's own iCloud originals, and only as the iCloud setting allows.
@@ -85,7 +87,10 @@ Follow the [Swift API Design Guidelines](https://www.swift.org/documentation/api
 3. Re-read your diff for compile errors before pushing. A failed cloud build costs about 10 minutes.
 4. Write a commit message with a short imperative subject ("Add an Albums screen for managing albums in bulk"), then a body saying what changed for the user and why.
 5. Push, wait for the **Build check**, and fix it until it's green.
-6. Update `README.md` and these docs when behaviour, gestures, screens or the build setup change.
+6. Update the docs in the same change:
+   - `README.md` and `docs/USER_GUIDE.md` when features, gestures, screens or settings change.
+   - `docs/ARCHITECTURE.md` when types, data flow or persistence change.
+   - `docs/DEVELOPMENT.md` and this file when the build, branches or deploy steps change.
 
 ## Checking on a device
 
