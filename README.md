@@ -89,3 +89,7 @@ Support         Info.plist and the privacy manifest
 docs/           User guide, architecture, development and design docs
 project.yml     XcodeGen spec (the Xcode project is generated on the build machine)
 ```
+
+## Licence
+
+[MIT](LICENSE). You're free to use, change and share the code. To run your own copy, register your own bundle ID and set up your own Apple Developer account and secrets, as described in [Development](docs/DEVELOPMENT.md).
