@@ -81,6 +81,7 @@ Don't add haptics to scrolling or passive updates.
   - The title shows "N Selected", and Cancel replaces Back.
   - **Select All** / **Deselect All** goes at the top right.
   - Selected items show a `checkmark.circle.fill` badge, an accent outline and a slight scale-down.
+  - Dragging sideways across items selects the range between where the drag started and the finger, like the Photos app. A drag that starts on a selected item deselects instead. Vertical drags scroll.
   - The batch action sits in a bottom bar.
 - **Creating and renaming:** use an `.alert` with one `TextField`. Disable the confirm button while the name is blank.
 - **Per-item menu:** tap an item to open a `.confirmationDialog` titled with its name, with the destructive option last.

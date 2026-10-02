@@ -2,13 +2,18 @@ import SwiftUI
 import Photos
 
 /// Manage albums in one place: create, rename and delete, and hold one to select several
-/// and delete them together behind a single iOS prompt.
+/// (or drag across them, like the Photos app) and delete them together behind a single iOS prompt.
 struct AlbumsView: View {
     @EnvironmentObject private var library: LibraryStore
 
     @State private var isSelecting = false
     @State private var selection: Set<String> = []
     @State private var isDeleting = false
+
+    // Drag to select
+    @State private var tileFrames: [String: CGRect] = [:]
+    @State private var dragPhase: DragPhase = .idle
+    @State private var lastDragIndex: Int?
 
     // Alerts and dialogs
     @State private var showNewAlbum = false
@@ -20,6 +25,21 @@ struct AlbumsView: View {
     @State private var showBatchDeleteConfirm = false
 
     private let columns = [GridItem(.adaptive(minimum: 100, maximum: 140), spacing: 14)]
+    private let gridSpace = "albumGrid"
+
+    /// What the current drag is doing. A drag that starts sideways selects; one that starts
+    /// up or down is left to the scroll view.
+    private enum DragPhase {
+        case idle
+        case scrolling
+        /// `adding` is false when the drag started on a ticked album, so it unticks instead.
+        case selecting(anchor: Int, adding: Bool, base: Set<String>)
+    }
+
+    private var isDragSelecting: Bool {
+        if case .selecting = dragPhase { return true }
+        return false
+    }
 
     /// Alphabetical, so albums are easy to find when managing them.
     private var albums: [PHAssetCollection] {
@@ -153,15 +173,34 @@ struct AlbumsView: View {
                     cell(for: album)
                 }
             }
+            .coordinateSpace(name: gridSpace)
+            .onPreferenceChange(TileFramesKey.self) { frames in
+                tileFrames = frames
+            }
+            .simultaneousGesture(dragSelectGesture, including: isSelecting ? .all : .subviews)
             .padding(16)
 
-            if !isSelecting {
-                Text("Hold an album to select several.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 24)
-            }
+            Text(hint)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 24)
         }
+        .scrollDisabled(isDragSelecting)
+    }
+
+    private var hint: String {
+        isSelecting ? "Drag sideways across albums to select several." : "Hold an album to select several."
+    }
+
+    private var dragSelectGesture: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .named(gridSpace))
+            .onChanged { value in
+                dragChanged(value)
+            }
+            .onEnded { _ in
+                dragPhase = .idle
+                lastDragIndex = nil
+            }
     }
 
     private func cell(for album: PHAssetCollection) -> some View {
@@ -178,6 +217,14 @@ struct AlbumsView: View {
         }
         .onLongPressGesture(minimumDuration: 0.35) {
             held(album)
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: TileFramesKey.self,
+                    value: [album.localIdentifier: proxy.frame(in: .named(gridSpace))]
+                )
+            }
         }
         .accessibilityAddTraits(traits)
     }
@@ -274,11 +321,48 @@ struct AlbumsView: View {
         }
     }
 
+    /// Holding only starts selecting. While selecting, a hold is usually the start of a drag,
+    /// so toggling here would flip the album the drag then starts from.
     private func held(_ album: PHAssetCollection) {
-        if isSelecting {
-            toggle(album)
-        } else {
-            startSelecting(with: album)
+        guard !isSelecting else { return }
+        startSelecting(with: album)
+    }
+
+    private func dragChanged(_ value: DragGesture.Value) {
+        let list = albums
+        switch dragPhase {
+        case .scrolling:
+            return
+        case .idle:
+            let isSideways = abs(value.translation.width) > abs(value.translation.height)
+            guard isSideways, let anchor = albumIndex(at: value.startLocation, in: list) else {
+                dragPhase = .scrolling
+                return
+            }
+            let adding = !selection.contains(list[anchor].localIdentifier)
+            dragPhase = .selecting(anchor: anchor, adding: adding, base: selection)
+            extendDragSelection(to: value.location, in: list)
+        case .selecting:
+            extendDragSelection(to: value.location, in: list)
+        }
+    }
+
+    /// Selects (or unselects) every album between where the drag started and where the finger is,
+    /// in grid order, on top of what was selected before the drag.
+    private func extendDragSelection(to location: CGPoint, in list: [PHAssetCollection]) {
+        guard case let .selecting(anchor, adding, base) = dragPhase,
+              let current = albumIndex(at: location, in: list),
+              current != lastDragIndex else { return }
+        lastDragIndex = current
+        let range = min(anchor, current)...max(anchor, current)
+        let ids = Set(list[range].map(\.localIdentifier))
+        selection = adding ? base.union(ids) : base.subtracting(ids)
+        Haptics.tap()
+    }
+
+    private func albumIndex(at point: CGPoint, in list: [PHAssetCollection]) -> Int? {
+        list.firstIndex { album in
+            tileFrames[album.localIdentifier]?.contains(point) ?? false
         }
     }
 
@@ -345,6 +429,15 @@ struct AlbumsView: View {
                 stopSelecting()
             }
         }
+    }
+}
+
+/// Each visible tile's frame in the grid, so a drag can tell which album is under the finger.
+private struct TileFramesKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
