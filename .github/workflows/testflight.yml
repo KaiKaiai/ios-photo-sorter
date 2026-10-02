@@ -10,11 +10,15 @@ name: TestFlight
 # The API key needs Admin access, because only Admin keys may use cloud signing.
 on:
   workflow_dispatch:
-  # Pushing a tag like build-2 also starts an upload. The Claude GitHub app can push
-  # but can't start workflows, so this is how an agent deploys when the owner asks.
+  # main is the release branch: a push that changes the app uploads it. Day-to-day work
+  # happens on dev, and reaches main only when the owner asks for a deploy.
   push:
-    tags:
-      - "build-*"
+    branches: [main]
+    paths:
+      - "Sort/**"
+      - "Support/**"
+      - "project.yml"
+      - ".github/workflows/testflight.yml"
   schedule:
     # 21:17 UTC on the 1st of every second month, so a build never reaches TestFlight's 90-day expiry.
     - cron: "17 21 1 */2 *"

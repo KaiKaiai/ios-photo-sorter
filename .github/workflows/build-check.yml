@@ -1,10 +1,11 @@
 name: Build check
 
 # Compiles the app on a GitHub-hosted Mac without signing, so code changes
-# can be checked before an Apple account is involved.
+# can be checked before an Apple account is involved. Runs on dev, where work happens;
+# pushes to main are checked by the TestFlight build itself.
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - "Sort/**"
       - "Support/**"

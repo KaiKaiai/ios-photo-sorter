@@ -17,18 +17,26 @@ Read this file and [`docs/DESIGN.md`](docs/DESIGN.md) before changing anything. 
 
 There is no Mac. All builds run on GitHub's cloud Macs, so there's no simulator, and each fix costs one build of about 5–10 minutes. Write code carefully and get it right the first time.
 
+### Branches
+
+| Branch | Purpose |
+|---|---|
+| `dev` | Where all work happens. Push changes here, or to a feature branch merged into `dev`. |
+| `main` | Release only. **Every push to `main` that changes the app uploads a build to TestFlight**, so it lands on the owner's phone. |
+
 | Workflow | Runs | Does |
 |---|---|---|
-| `.github/workflows/build-check.yml` | On every push to `main` that touches app code, on pull requests, or by hand | An unsigned compile. This is the check every change must pass. |
-| `.github/workflows/testflight.yml` | **On request only**: Actions → TestFlight → Run workflow, or pushing a `build-N` tag. Also on the 1st of every second month | Archives the app, has Apple sign it in the cloud, and uploads it to TestFlight |
+| `.github/workflows/build-check.yml` | On every push to `dev` that touches app code, on pull requests, or by hand | An unsigned compile. This is the check every change must pass. |
+| `.github/workflows/testflight.yml` | On every push to `main` that touches app code, by hand (Actions → TestFlight → Run workflow), and on the 1st of every second month | Archives the app, has Apple sign it in the cloud, and uploads it to TestFlight |
 
-- The build check must be green before you call any change done. When it fails, read the log, fix the cause and push again. Don't disable or weaken the check.
-- Deploy to TestFlight only when the owner asks. To deploy:
-  1. Make sure the build check is green on `main`.
-  2. Find the highest existing `build-N` tag with `git ls-remote --tags origin 'build-*'`.
-  3. Tag `main` with the next number and push the tag: `git tag build-N origin/main`, then `git push origin build-N`.
+- The build check must be green on `dev` before you call any change done. When it fails, read the log, fix the cause and push again. Don't disable or weaken the check.
+- **Never push to `main` unless the owner asks for a deploy.** To deploy:
+  1. Make sure the build check is green on `dev`.
+  2. Fast-forward `main` to `dev`: `git fetch origin && git push origin origin/dev:main`.
+  3. Watch the TestFlight run until it's green, then tell the owner to tap **Update** in TestFlight.
 
-  Agents can't press Run workflow, because the Claude GitHub app can't start workflows.
+  This is the only way an agent can deploy: the Claude GitHub app can't press Run workflow, and Claude's cloud sessions can't push tags.
+- If `main` has commits that `dev` doesn't, merge `main` into `dev` first, so the fast-forward works.
 - Changes to `.github/workflows/` touch the job that holds the owner's Apple API key. Keep them minimal, never print or send secrets anywhere, and point them out to the owner.
 - The build number comes from the workflow's run number. Change `MARKETING_VERSION` in `project.yml` only for a release the owner asks for.
 - New Swift files under `Sort/` are picked up automatically. There's no project file to edit.
